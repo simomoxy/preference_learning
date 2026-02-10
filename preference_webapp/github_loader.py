@@ -40,14 +40,43 @@ def load_from_github(
             api_url = f"https://api.github.com/repos/{repo}/contents/{path}"
             logger.info(f"Fetching file list from GitHub API: {api_url}")
 
-            response = requests.get(api_url, timeout=60)  # Increased timeout
-            if response.status_code != 200:
-                logger.error(f"GitHub API returned {response.status_code}")
-                return None, None
+            filenames = []
+            page = 1
 
-            contents = response.json()
-            filenames = [item['name'] for item in contents if item['name'].endswith('.png')]
+            # Handle pagination
+            while api_url:
+                response = requests.get(api_url, timeout=60, params={'per_page': 100})
+                if response.status_code != 200:
+                    logger.error(f"GitHub API returned {response.status_code}")
+                    return None, None
+
+                contents = response.json()
+
+                # Check if it's an error response
+                if isinstance(contents, dict) and 'message' in contents:
+                    logger.error(f"GitHub API error: {contents.get('message')}")
+                    return None, None
+
+                # Extract filenames from this page
+                page_filenames = [item['name'] for item in contents if item.get('name', '').endswith('.png')]
+                filenames.extend(page_filenames)
+
+                logger.info(f"Page {page}: Found {len(page_filenames)} PNG files")
+
+                # Check for Link header to see if there's a next page
+                link_header = response.headers.get('Link', '')
+                if 'next' in link_header:
+                    # Extract next page URL
+                    for link in link_header.split(','):
+                        if 'rel="next"' in link:
+                            api_url = link.split('<')[1].split('>')[0]
+                            page += 1
+                            break
+                else:
+                    api_url = None
+
             filenames = sorted(filenames)
+            logger.info(f"Total PNG files found: {len(filenames)}")
 
             if not filenames:
                 logger.error(f"No PNG files found in {repo}/{path}")

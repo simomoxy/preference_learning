@@ -31,7 +31,7 @@ def show_summary_page():
     # Check if data exists
     if 'preferences' not in st.session_state or len(st.session_state.preferences) == 0:
         st.warning("No preference data found. Please complete comparisons first.")
-        if st.button("Go to Comparisons", use_container_width=True):
+        if st.button("Go to Comparisons", width="stretched"):
             st.session_state.current_step = 'compare'
             st.rerun()
         return
@@ -100,7 +100,7 @@ def show_summary_page():
             masks = st.session_state.masks
             winner_mask = masks[winner_idx]
             mask_display = (winner_mask - winner_mask.min()) / (winner_mask.max() - winner_mask.min() + 1e-8)
-            st.image(mask_display, clamp=True, use_container_width=True)
+            st.image(mask_display, clamp=True, width="stretched")
 
             st.markdown(f"**Score:** {winner_score:.2f}")
 
@@ -120,7 +120,7 @@ def show_summary_page():
         })
 
     ranking_df = pd.DataFrame(ranking_display)
-    st.dataframe(ranking_df, use_container_width=True)
+    st.dataframe(ranking_df, width="stretched")
 
     if len(ranking_data) > 10:
         st.caption(f"Showing top 10 of {len(ranking_data)} masks")
@@ -197,7 +197,7 @@ def show_summary_page():
             data=csv_data,
             file_name=f"preferences_{st.session_state.period}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
             mime="text/csv",
-            use_container_width=True
+            width="stretched"
         )
 
     # Export as JSON
@@ -209,7 +209,7 @@ def show_summary_page():
             data=json_data,
             file_name=f"preferences_{st.session_state.period}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
             mime="application/json",
-            use_container_width=True
+            width="stretched"
         )
 
     st.markdown("---")
@@ -220,7 +220,7 @@ def show_summary_page():
     col1, col2, col3 = st.columns([1, 2, 1])
 
     with col2:
-        if st.button("Load New Data", use_container_width=True):
+        if st.button("Load New Data", width="stretched"):
             # Reset session
             for key in list(st.session_state.keys()):
                 if key not in ['masks_loaded']:  # Keep data loaded
