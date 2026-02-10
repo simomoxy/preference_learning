@@ -20,7 +20,6 @@ from ui.theme import render_progress_indicator, COLORS
 
 
 # Statistics computation using same features as GP learning
-@st.cache_data(ttl=3600)
 def compute_mask_statistics(mask_idx):
     """
     Compute statistics for a mask using same features as GP experiments.

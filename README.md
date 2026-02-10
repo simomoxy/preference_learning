@@ -22,9 +22,30 @@ The webapp automatically loads LAMAP prediction masks from:
 - **GitHub**: `simomoxy/lamap-bronze-age-data` (default for deployment)
 - **Local files**: `preference_webapp/bronze_age/` (for testing)
 
-## Deployment
+## Deployment to Streamlit Cloud
 
-See [preference_webapp/DEPLOYMENT_GUIDE.md](preference_webapp/DEPLOYMENT_GUIDE.md) for complete deployment instructions to Streamlit Cloud.
+1. **Push code to GitHub** (already done at `simomoxy/preference_learning`)
+
+2. **Deploy to Streamlit Cloud**:
+   - Go to https://share.streamlit.io
+   - Click "New app"
+   - Select repository: `simomoxy/preference_learning`
+   - Main file path: `preference_webapp/app_simple.py`
+   - Click "Deploy"
+
+3. **Set environment variables** (in Streamlit Cloud app settings):
+   - `GITHUB_DATA_REPO`: `simomoxy/lamap-bronze-age-data`
+   - `GITHUB_TOKEN`: Your GitHub personal access token (for uploading responses)
+   - `GITHUB_BRANCH`: `main` (optional)
+
+### Troubleshooting Deployment
+
+If the app crashes on Streamlit Cloud:
+1. Check the app logs in Streamlit Cloud dashboard
+2. Common issues:
+   - Missing environment variables (set `GITHUB_DATA_REPO` at minimum)
+   - Large memory usage (Streamlit Cloud free tier has limited RAM)
+   - Timeout when loading many images from GitHub
 
 ## Usage
 
