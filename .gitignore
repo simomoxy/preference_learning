@@ -1,0 +1,82 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.conda/
+venv/
+ENV/
+env/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# PyCharm
+.idea/
+
+# VS Code
+.vscode/
+
+# Data files (large)
+*.tif
+*.tiff
+*.geotiff
+*.geojson
+*.shp
+*.shx
+*.dbf
+*.prj
+*.cpg
+
+# LAMAP results
+lamap_results/
+results/
+
+# Checkpoints and logs
+checkpoints/
+lightning_logs/
+logs/
+
+# Test data
+preference_webapp/bronze_age/
+preference_webapp/lamap_results_sample/
+preference_webapp/data/
+
+# Compressed files
+*.zip
+*.tar.gz
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Model files
+*.pth
+*.ckpt
+*.pkl
+
+# Paper figures
+paper/figures/
+*.pdf
+
+# HPC
+hpc/slurm_output/
