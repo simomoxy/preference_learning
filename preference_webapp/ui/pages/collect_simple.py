@@ -209,19 +209,19 @@ def show_collect_page():
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-        if st.button("Left Option Better", type="primary", width="stretch", key="left_better"):
+        if st.button("Left Option Better", type="primary", use_container_width=True, key="left_better"):
             record_preference(idx_a, idx_b, 0)
 
     with col2:
-        if st.button("Right Option Better", type="primary", width="stretch", key="right_better"):
+        if st.button("Right Option Better", type="primary", use_container_width=True, key="right_better"):
             record_preference(idx_a, idx_b, 1)
 
     with col3:
-        if st.button("Cannot Decide", width="stretch", key="tie"):
+        if st.button("Cannot Decide", use_container_width=True, key="tie"):
             record_preference(idx_a, idx_b, 2)
 
     with col4:
-        if st.button("Skip", width="stretch", key="skip"):
+        if st.button("Skip", use_container_width=True, key="skip"):
             record_preference(idx_a, idx_b, -1)
 
     st.markdown("---")
@@ -341,6 +341,6 @@ def show_completion_message():
 
     st.markdown("---")
 
-    if st.button("View Summary", type="primary", width="stretch"):
+    if st.button("View Summary", type="primary", use_container_width=True):
         st.session_state.current_step = 'summary'
         st.rerun()

@@ -31,7 +31,7 @@ def show_summary_page():
     # Check if data exists
     if 'preferences' not in st.session_state or len(st.session_state.preferences) == 0:
         st.warning("No preference data found. Please complete comparisons first.")
-        if st.button("Go to Comparisons", width="stretch"):
+        if st.button("Go to Comparisons", use_container_width=True):
             st.session_state.current_step = 'compare'
             st.rerun()
         return
@@ -220,7 +220,7 @@ def show_summary_page():
     col1, col2, col3 = st.columns([1, 2, 1])
 
     with col2:
-        if st.button("Load New Data", width="stretch"):
+        if st.button("Load New Data", use_container_width=True):
             # Reset session
             for key in list(st.session_state.keys()):
                 if key not in ['masks_loaded']:  # Keep data loaded

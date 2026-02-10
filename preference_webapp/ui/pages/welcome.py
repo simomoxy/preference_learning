@@ -81,7 +81,7 @@ def show_welcome_page():
     with col3:
         st.write("")  # Spacer
         st.write("")  # Spacer
-        load_button = st.button("Load Predictions", type="primary", width="stretch")
+        load_button = st.button("Load Predictions", type="primary", use_container_width=True)
 
     # Load data when button clicked
     if load_button or ('masks_loaded' in st.session_state and st.session_state.masks_loaded):
@@ -130,7 +130,7 @@ def show_welcome_page():
 
             # Start button
             st.markdown("### Ready to Start?")
-            if st.button("Begin Comparisons", type="primary", width="stretch"):
+            if st.button("Begin Comparisons", type="primary", use_container_width=True):
                 st.session_state.current_step = 'compare'
                 st.session_state.comparisons_completed = 0
                 st.session_state.comparisons_total = 50
