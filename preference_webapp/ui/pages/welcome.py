@@ -290,7 +290,6 @@ def load_period_data(period: str, expert_name: str) -> bool:
         st.session_state.period = period
         st.session_state.expert_name = expert_name if expert_name else "Anonymous"
         st.session_state.masks_loaded = True
-        st.session_state.data_source = data_source
 
         total_memory_mb = sum(m.nbytes for m in masks) // 1024 // 1024
         logger.info(f"Loaded {len(masks)} masks (~{total_memory_mb}MB total)")
