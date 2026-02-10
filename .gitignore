@@ -80,3 +80,6 @@ paper/figures/
 
 # HPC
 hpc/slurm_output/
+
+# Paper draft (do not delete)
+paper/
