@@ -284,14 +284,34 @@ def load_period_data(period: str, expert_name: str) -> bool:
             """)
             return False
 
-        # Store in session state
-        st.session_state.masks = masks
+        # Compress images to save memory on Streamlit Cloud
+        compressed_masks = []
+        for mask in masks:
+            # Downsample to 1/4 resolution (606x506 instead of 2424x2025)
+            if mask.shape[0] > 1000:
+                try:
+                    from skimage.transform import resize
+                    mask = resize(mask, (mask.shape[0]//4, mask.shape[1]//4),
+                                   preserve_range=True, anti_aliasing=True)
+                except ImportError:
+                    # Fallback: simple slicing if skimage not available
+                    mask = mask[::4, ::4]
+
+            # Convert to uint8 (8x less memory than float64)
+            if mask.dtype in [np.float64, np.float32, np.float16]:
+                mask = np.clip(mask * 255, 0, 255).astype(np.uint8)
+
+            compressed_masks.append(mask)
+
+        # Store compressed masks in session state
+        st.session_state.masks = compressed_masks
         st.session_state.mask_metadata = metadata
         st.session_state.period = period
         st.session_state.expert_name = expert_name if expert_name else "Anonymous"
         st.session_state.masks_loaded = True
+        st.session_state.data_source = data_source
 
-        logger.info(f"Loaded {len(masks)} masks for period {period}")
+        logger.info(f"Loaded and compressed {len(compressed_masks)} masks (~{sum(m.nbytes for m in compressed_masks) // 1024 // 1024}MB)")
         return True
 
     except Exception as e:
