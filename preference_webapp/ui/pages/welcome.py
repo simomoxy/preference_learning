@@ -284,34 +284,16 @@ def load_period_data(period: str, expert_name: str) -> bool:
             """)
             return False
 
-        # Compress images to save memory on Streamlit Cloud
-        compressed_masks = []
-        for mask in masks:
-            # Downsample to 1/4 resolution (606x506 instead of 2424x2025)
-            if mask.shape[0] > 1000:
-                try:
-                    from skimage.transform import resize
-                    mask = resize(mask, (mask.shape[0]//4, mask.shape[1]//4),
-                                   preserve_range=True, anti_aliasing=True)
-                except ImportError:
-                    # Fallback: simple slicing if skimage not available
-                    mask = mask[::4, ::4]
-
-            # Convert to uint8 (8x less memory than float64)
-            if mask.dtype in [np.float64, np.float32, np.float16]:
-                mask = np.clip(mask * 255, 0, 255).astype(np.uint8)
-
-            compressed_masks.append(mask)
-
-        # Store compressed masks in session state
-        st.session_state.masks = compressed_masks
+        # Store masks in session state (already compressed from loader)
+        st.session_state.masks = masks
         st.session_state.mask_metadata = metadata
         st.session_state.period = period
         st.session_state.expert_name = expert_name if expert_name else "Anonymous"
         st.session_state.masks_loaded = True
         st.session_state.data_source = data_source
 
-        logger.info(f"Loaded and compressed {len(compressed_masks)} masks (~{sum(m.nbytes for m in compressed_masks) // 1024 // 1024}MB)")
+        total_memory_mb = sum(m.nbytes for m in masks) // 1024 // 1024
+        logger.info(f"Loaded {len(masks)} masks (~{total_memory_mb}MB total)")
         return True
 
     except Exception as e:
@@ -345,9 +327,21 @@ def load_from_local(data_dir: Path):
             img = Image.open(mask_file)
             mask_array = np.array(img)
 
-            # Convert to float and normalize
-            if mask_array.dtype == np.uint8:
-                mask_array = mask_array.astype(float) / 255.0
+            # COMPRESS: Downsample to 1/4 resolution
+            if mask_array.shape[0] > 1000:
+                try:
+                    from skimage.transform import resize
+                    mask_array = resize(mask_array, (mask_array.shape[0]//4, mask_array.shape[1]//4),
+                                   preserve_range=True, anti_aliasing=True)
+                except ImportError:
+                    mask_array = mask_array[::4, ::4]
+
+            # Convert to uint8 to save memory
+            if mask_array.dtype in [np.float64, np.float32, np.float16]:
+                if mask_array.max() <= 1.0:
+                    mask_array = (mask_array * 255).astype(np.uint8)
+                else:
+                    mask_array = mask_array.astype(np.uint8)
 
             masks.append(mask_array)
 

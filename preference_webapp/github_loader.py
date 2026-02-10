@@ -105,9 +105,24 @@ def load_from_github(
                 img = Image.open(BytesIO(response.content))
                 mask_array = np.array(img)
 
-                # Convert to float and normalize
-                if mask_array.dtype == np.uint8:
-                    mask_array = mask_array.astype(float) / 255.0
+                # COMPRESS IMMEDIATELY to save memory
+                # Downsample to 1/4 resolution
+                if mask_array.shape[0] > 1000:
+                    try:
+                        from skimage.transform import resize
+                        mask_array = resize(mask_array, (mask_array.shape[0]//4, mask_array.shape[1]//4),
+                                              preserve_range=True, anti_aliasing=True)
+                    except ImportError:
+                        # Fallback: simple slicing
+                        mask_array = mask_array[::4, ::4]
+
+                # Convert to uint8 (8x less memory than float64)
+                if mask_array.dtype in [np.float64, np.float32, np.float16]:
+                    # Assume 0-1 range if float
+                    if mask_array.max() <= 1.0:
+                        mask_array = (mask_array * 255).astype(np.uint8)
+                    else:
+                        mask_array = mask_array.astype(np.uint8)
 
                 masks.append(mask_array)
                 metadata.append({
@@ -117,7 +132,7 @@ def load_from_github(
                     'URL': file_url
                 })
 
-                logger.info(f"Loaded {filename}")
+                logger.info(f"Loaded {filename} (compressed to {mask_array.shape[0]}x{mask_array.shape[1]}, {mask_array.dtype})")
 
             except Exception as e:
                 logger.error(f"Error loading {filename}: {e}")
