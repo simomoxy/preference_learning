@@ -77,6 +77,36 @@ def show_summary_page():
     with col4:
         st.metric("Ties/Skips", ties + skips)
 
+    # Cognitive Load Metrics
+    st.markdown("### Cognitive Load Metrics")
+
+    # Calculate response time statistics
+    response_times = [p.get('response_time_seconds') for p in preferences if p.get('response_time_seconds') is not None]
+
+    if response_times:
+        import numpy as np
+        avg_time = np.mean(response_times)
+        median_time = np.median(response_times)
+        std_time = np.std(response_times)
+        min_time = np.min(response_times)
+        max_time = np.max(response_times)
+
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            st.metric("Avg Response Time", f"{avg_time:.1f}s")
+
+        with col2:
+            st.metric("Median Time", f"{median_time:.1f}s")
+
+        with col3:
+            st.metric("Std Dev", f"{std_time:.1f}s")
+
+        with col4:
+            st.metric("Skip Rate", f"{(skips/len(preferences)*100):.1f}%")
+    else:
+        st.info("Response time data not available for this session.")
+
     st.markdown("---")
 
     # Compute simple ranking based on wins

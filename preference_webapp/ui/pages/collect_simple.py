@@ -163,6 +163,14 @@ def show_collect_page():
     idx_a, idx_b = pairs[current_idx]
     masks = st.session_state.masks
 
+    # Record when this comparison was first shown (for timing)
+    comparison_key = f"comparison_{current_idx}"
+    if comparison_key not in st.session_state:
+        from datetime import datetime
+        st.session_state[comparison_key] = {
+            'shown_at': datetime.now().isoformat()
+        }
+
     mask_a = masks[idx_a]
     mask_b = masks[idx_b]
 
@@ -295,13 +303,39 @@ def record_preference(idx_a: int, idx_b: int, preference: int):
         idx_b: Index of second mask
         preference: 0=left, 1=right, 2=tie, -1=skip
     """
-    # Record preference
-    st.session_state.preferences.append({
+    from datetime import datetime
+
+    # Calculate response time
+    current_idx = st.session_state.current_pair_idx
+    comparison_key = f"comparison_{current_idx}"
+    response_time_seconds = None
+
+    if comparison_key in st.session_state:
+        shown_at = st.session_state[comparison_key].get('shown_at')
+        if shown_at:
+            try:
+                from datetime import datetime
+                shown_time = datetime.fromisoformat(shown_at)
+                response_time = datetime.now() - shown_time
+                response_time_seconds = round(response_time.total_seconds(), 2)
+            except:
+                pass
+
+    # Record preference with timing data
+    preference_data = {
         'idx_a': idx_a,
         'idx_b': idx_b,
         'preference': preference,
-        'comparison_number': st.session_state.comparisons_completed + 1
-    })
+        'preference_label': {0: 'Left', 1: 'Right', 2: 'Tie', -1: 'Skipped'}[preference],
+        'comparison_number': st.session_state.comparisons_completed + 1,
+        'timestamp': datetime.now().isoformat()
+    }
+
+    # Add response time if available
+    if response_time_seconds is not None:
+        preference_data['response_time_seconds'] = response_time_seconds
+
+    st.session_state.preferences.append(preference_data)
 
     # Update progress
     if preference != -1:
@@ -318,6 +352,15 @@ def show_completion_message():
     """
     Show completion message and navigation to results.
     """
+    # Calculate cognitive load statistics
+    preferences = st.session_state.preferences
+    response_times = [p.get('response_time_seconds') for p in preferences if p.get('response_time_seconds') is not None]
+
+    avg_time = "N/A"
+    if response_times:
+        import numpy as np
+        avg_time = f"{np.mean(response_times):.1f}s"
+
     st.markdown(f"""
     <div class="winner-badge">
         All Comparisons Complete!
@@ -332,9 +375,10 @@ def show_completion_message():
             Your preferences have been recorded.
         </p>
         <p>
-            <strong>Total comparisons:</strong> {len([p for p in st.session_state.preferences if p['preference'] != -1])}<br>
-            <strong>Skipped:</strong> {len([p for p in st.session_state.preferences if p['preference'] == -1])}<br>
-            <strong>Ties:</strong> {len([p for p in st.session_state.preferences if p['preference'] == 2])}
+            <strong>Total comparisons:</strong> {len([p for p in preferences if p['preference'] != -1])}<br>
+            <strong>Skipped:</strong> {len([p for p in preferences if p['preference'] == -1])}<br>
+            <strong>Ties:</strong> {len([p for p in preferences if p['preference'] == 2])}<br>
+            <strong>Avg response time:</strong> {avg_time}
         </p>
     </div>
     """, unsafe_allow_html=True)
