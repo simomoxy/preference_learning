@@ -102,7 +102,7 @@ def show_welcome_page():
                 st.metric("Total Masks", len(st.session_state.masks))
 
             with col2:
-                st.metric("Target Comparisons", "50")
+                st.metric("Target Comparisons", "30")
 
             with col3:
                 st.metric("Expert", expert_name if expert_name else "Anonymous")
@@ -133,10 +133,10 @@ def show_welcome_page():
             if st.button("Begin Comparisons", type="primary", use_container_width=True):
                 st.session_state.current_step = 'compare'
                 st.session_state.comparisons_completed = 0
-                st.session_state.comparisons_total = 50
+                st.session_state.comparisons_total = 30
                 st.session_state.preferences = []
                 st.session_state.current_pair_idx = 0
-                st.session_state.comparison_pairs = generate_comparison_pairs(len(masks), 50)
+                st.session_state.comparison_pairs = generate_comparison_pairs(len(masks), 30)
                 st.rerun()
 
         else:
@@ -150,7 +150,7 @@ def show_welcome_page():
     2. **Load Data:** Click "Load Predictions" to load probability maps
     3. **Compare:** You will see pairs of predictions side-by-side
     4. **Choose:** Select which prediction looks more plausible for archaeological sites
-    5. **View Results:** After 50 comparisons, see your preferences
+    5. **View Results:** After 30 comparisons, see your preferences
     """)
 
     st.markdown("#### Tips for Comparing Predictions")
@@ -322,7 +322,7 @@ def load_from_local(data_dir: Path):
         masks = []
         metadata = []
 
-        for mask_file in mask_files[:50]:  # Limit to 50 masks
+        for mask_file in mask_files[:30]:  # Limit to 30 masks
             img = Image.open(mask_file)
             mask_array = np.array(img)
 

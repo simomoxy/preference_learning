@@ -52,7 +52,7 @@ If the app crashes on Streamlit Cloud:
 1. Select archaeological period (bronze_age, byzantine, roman)
 2. Enter expert name
 3. Load prediction maps
-4. Complete 50 pairwise comparisons
+4. Complete 30 pairwise comparisons
 5. View results and export data
 
 ## Features
@@ -87,7 +87,7 @@ Your task is to compare pairs of site prediction maps and choose which looks mor
 - Spatial coherence
 - Archaeological realism
 
-Time estimate: ~30 minutes for 50 comparisons
+Time estimate: ~20 minutes for 30 comparisons
 
 ## For Researchers
 

@@ -65,7 +65,7 @@ def initialize_session_state():
         st.session_state.comparisons_completed = 0
 
     if 'comparisons_total' not in st.session_state:
-        st.session_state.comparisons_total = 50
+        st.session_state.comparisons_total = 30
 
     if 'current_pair_idx' not in st.session_state:
         st.session_state.current_pair_idx = 0
