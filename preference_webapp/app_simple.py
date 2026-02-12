@@ -24,6 +24,7 @@ from ui.theme import apply_theme, get_theme_config
 # Page imports
 from ui.pages.welcome import show_welcome_page
 from ui.pages.collect_simple import show_collect_page
+from ui.pages.expert_ranking import show_expert_ranking_page
 from ui.pages.summary import show_summary_page
 
 # Configure Streamlit page
@@ -65,7 +66,7 @@ def initialize_session_state():
         st.session_state.comparisons_completed = 0
 
     if 'comparisons_total' not in st.session_state:
-        st.session_state.comparisons_total = 30
+        st.session_state.comparisons_total = 50
 
     if 'current_pair_idx' not in st.session_state:
         st.session_state.current_pair_idx = 0
@@ -75,6 +76,20 @@ def initialize_session_state():
 
     if 'preferences' not in st.session_state:
         st.session_state.preferences = []
+
+    # Active learning state
+    if 'use_active_learning' not in st.session_state:
+        st.session_state.use_active_learning = False
+
+    if 'active_loop' not in st.session_state:
+        st.session_state.active_loop = None
+
+    # Expert ranking validation
+    if 'expert_ranking_validation' not in st.session_state:
+        st.session_state.expert_ranking_validation = None
+
+    if 'qualitative_feedback' not in st.session_state:
+        st.session_state.qualitative_feedback = None
 
     # GitHub mode toggle
     if 'force_github' not in st.session_state:
@@ -169,6 +184,8 @@ def main():
         show_welcome_page()
     elif st.session_state.current_step == 'compare':
         show_collect_page()
+    elif st.session_state.current_step == 'ranking':
+        show_expert_ranking_page()
     elif st.session_state.current_step == 'summary':
         show_summary_page()
     else:

@@ -7,6 +7,39 @@ Simple data loading interface that hides technical complexity.
 import sys
 from pathlib import Path
 
+
+def ensure_2d_mask(mask_array):
+    """
+    Ensure mask is a 2D grayscale array.
+
+    Handles RGB/RGBA images and various array shapes.
+
+    Args:
+        mask_array: numpy array from PIL Image
+
+    Returns:
+        2D numpy array (grayscale)
+    """
+    from PIL import Image
+    import numpy as np
+
+    # Remove singleton dimensions
+    while mask_array.ndim > 2:
+        if mask_array.ndim == 3 and mask_array.shape[2] in [3, 4]:  # RGB or RGBA
+            # Convert back to PIL and then to grayscale
+            # This is more reliable than manual conversion
+            if mask_array.max() <= 1.0:
+                # Probability map - convert carefully
+                img = Image.fromarray((mask_array * 255).astype(np.uint8))
+            else:
+                img = Image.fromarray(mask_array.astype(np.uint8))
+            img_gray = img.convert('L')
+            mask_array = np.array(img_gray)
+        else:
+            mask_array = np.squeeze(mask_array)
+
+    return mask_array
+
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
@@ -45,7 +78,7 @@ def show_welcome_page():
             Simply choose which one looks more plausible for archaeological sites.
         </p>
         <p>
-            <strong>Time estimate:</strong> ~30 minutes for all comparisons
+            <strong>Time estimate:</strong> ~20 minutes for all comparisons
         </p>
         <p>
             <strong>Data storage:</strong> Your responses will be automatically uploaded to GitHub
@@ -84,63 +117,73 @@ def show_welcome_page():
         load_button = st.button("Load Predictions", type="primary", use_container_width=True)
 
     # Load data when button clicked
-    if load_button or ('masks_loaded' in st.session_state and st.session_state.masks_loaded):
-        if load_button:
-            with st.spinner("Loading prediction maps..."):
-                success = load_period_data(period, expert_name)
-        else:
-            success = st.session_state.get('masks_loaded', False)
+    if load_button:
+        with st.spinner("Loading prediction maps..."):
+            success = load_period_data(period, expert_name)
 
-        if success:
-            st.success(f"Loaded {len(st.session_state.masks)} prediction maps for {period.replace('_', ' ').title()}!")
-
-            # Show data summary
-            st.markdown("### Data Summary")
-            col1, col2, col3 = st.columns(3)
-
-            with col1:
-                st.metric("Total Masks", len(st.session_state.masks))
-
-            with col2:
-                st.metric("Target Comparisons", "30")
-
-            with col3:
-                st.metric("Expert", expert_name if expert_name else "Anonymous")
-
-            # Preview sample images
-            st.markdown("### Sample Predictions")
-            st.caption("Here are a few examples of the prediction maps you will evaluate:")
-
-            # Show first 4 masks in a grid
-            masks = st.session_state.masks
-            sample_indices = [0, 1, 2, 3] if len(masks) >= 4 else list(range(len(masks)))
-
-            col1, col2, col3, col4 = st.columns(4)
-            cols = [col1, col2, col3, col4]
-
-            for idx, mask_idx in enumerate(sample_indices):
-                with cols[idx]:
-                    mask = masks[mask_idx]
-                    # Normalize for display
-                    mask_display = (mask - mask.min()) / (mask.max() - mask.min() + 1e-8)
-                    st.image(mask_display, clamp=True, width="stretch")
-                    st.caption(f"Mask {mask_idx + 1}")
-
-            st.markdown("---")
-
-            # Start button
-            st.markdown("### Ready to Start?")
-            if st.button("Begin Comparisons", type="primary", use_container_width=True):
-                st.session_state.current_step = 'compare'
-                st.session_state.comparisons_completed = 0
-                st.session_state.comparisons_total = 30
-                st.session_state.preferences = []
-                st.session_state.current_pair_idx = 0
-                st.session_state.comparison_pairs = generate_comparison_pairs(len(masks), 30)
-                st.rerun()
-
-        else:
+        if not success:
             st.error(f"Could not load prediction maps for {period}. Please check the data directory.")
+            return  # Don't continue
+
+    # Show data summary if masks are loaded (regardless of which button was clicked)
+    if st.session_state.get('masks_loaded', False):
+        st.success(f"Loaded {len(st.session_state.masks)} prediction maps for {period.replace('_', ' ').title()}!")
+
+        # Show data summary
+        st.markdown("### Data Summary")
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.metric("Total Masks", len(st.session_state.masks))
+
+        with col2:
+            st.metric("Target Comparisons", "50")
+
+        with col3:
+            st.metric("Expert", expert_name if expert_name else "Anonymous")
+
+        # Preview sample images
+        st.markdown("### Sample Predictions")
+        st.caption("Here are a few examples of the prediction maps you will evaluate:")
+
+        # Show first 4 masks in a grid
+        masks = st.session_state.masks
+        sample_indices = [0, 1, 2, 3] if len(masks) >= 4 else list(range(len(masks)))
+
+        col1, col2, col3, col4 = st.columns(4)
+        cols = [col1, col2, col3, col4]
+
+        for idx, mask_idx in enumerate(sample_indices):
+            with cols[idx]:
+                mask = masks[mask_idx]
+                # Normalize for display
+                mask_display = (mask - mask.min()) / (mask.max() - mask.min() + 1e-8)
+                st.image(mask_display, clamp=True, width="stretch")
+                st.caption(f"Mask {mask_idx + 1}")
+
+        st.markdown("---")
+
+        # Start button
+        st.markdown("### Ready to Start?")
+        if st.button("Begin Comparisons", type="primary", use_container_width=True, key="begin_comparisons_button"):
+            st.session_state.current_step = 'compare'
+            st.session_state.comparisons_completed = 0
+            st.session_state.comparisons_total = 30  # Updated to 30 configs
+            st.session_state.preferences = []
+            st.session_state.current_pair_idx = 0
+
+            # Store masks for later use (avoid recomputing)
+            st.session_state.masks_for_comparison = masks
+
+            # Always use random pairs for reproducibility
+            st.session_state.active_loop = None
+            st.session_state.use_active_learning = False
+            st.session_state.comparison_pairs = generate_comparison_pairs(len(masks), 50)
+
+            st.rerun()
+
+        # Stop here - don't show instructions if data is loaded
+        return
 
     # Instructions
     st.markdown("---")
@@ -150,7 +193,7 @@ def show_welcome_page():
     2. **Load Data:** Click "Load Predictions" to load probability maps
     3. **Compare:** You will see pairs of predictions side-by-side
     4. **Choose:** Select which prediction looks more plausible for archaeological sites
-    5. **View Results:** After 30 comparisons, see your preferences
+    5. **View Results:** After 50 comparisons, see your preferences
     """)
 
     st.markdown("#### Tips for Comparing Predictions")
@@ -322,9 +365,12 @@ def load_from_local(data_dir: Path):
         masks = []
         metadata = []
 
-        for mask_file in mask_files[:30]:  # Limit to 30 masks
+        for mask_file in mask_files[:50]:  # Limit to 50 masks
             img = Image.open(mask_file)
             mask_array = np.array(img)
+
+            # Ensure 2D using helper function
+            mask_array = ensure_2d_mask(mask_array)
 
             # COMPRESS: Downsample to 1/4 resolution
             if mask_array.shape[0] > 1000:
