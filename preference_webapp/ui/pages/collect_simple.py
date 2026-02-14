@@ -19,97 +19,39 @@ logger = logging.getLogger(__name__)
 from ui.theme import render_progress_indicator, COLORS
 
 
-# Statistics computation using same features as GP learning
+# Use the same encoder as HPC experiments (7D normalized features)
 def compute_mask_statistics(mask_idx):
     """
-    Compute statistics for a mask using same features as GP experiments.
-    Cached for performance - only index needed, retrieves mask from session_state.
+    Compute statistics for a mask using the same SegmentationFeatureEncoder
+    as the GP/Bradley-Terry experiments (7D normalized [0,1] features).
     """
-    from skimage import measure
-    from scipy import ndimage
+    from models.toy_encoder import SegmentationFeatureEncoder
 
     try:
-        # Get mask from session state
         masks = st.session_state.masks
         mask = masks[mask_idx]
 
-        # Ensure 2D array (remove all singleton dimensions)
-        mask_2d = np.array(mask)
-
-        # Convert to 2D grayscale if needed
-        mask_2d = np.squeeze(mask_2d)
+        # Ensure 2D grayscale float in [0, 1]
+        mask_2d = np.squeeze(np.array(mask))
         if mask_2d.ndim == 3:
             mask_2d = np.mean(mask_2d, axis=2)
-
-        # Ensure 2D
-        if mask_2d.ndim != 2:
-            raise ValueError(f"Cannot convert mask to 2D, shape: {mask_2d.shape}")
-
-        # Ensure we're working with float and normalize to 0-1
         mask_float = mask_2d.astype(float)
         if mask_float.max() > 1.0:
             mask_float = mask_float / 255.0
 
-        # For probability maps, use 0.5 threshold
-        mask_binary = (mask_float > 0.5).astype(np.uint8)
+        # Use the same encoder as experiments
+        encoder = SegmentationFeatureEncoder()
+        features = encoder.encode(mask_float)  # 7D normalized [0, 1]
+        names = encoder.get_feature_names()
 
-        # 1. Moran's I (spatial autocorrelation)
-        mean = mask_float.mean()
-        var = mask_float.var()
-        if var > 1e-10:
-            shifted = np.roll(mask_float, 1, axis=0)
-            morans_i = np.sum((mask_float - mean) * (shifted - mean)) / (np.sum((mask_float - mean) ** 2) + 1e-10)
-        else:
-            morans_i = 0.0
-
-        # 2. Connected components
-        labeled, num_components = ndimage.label(mask_binary)
-
-        # 3. Area distribution (mean component size)
-        regions = measure.regionprops(labeled, mask_binary)
-        areas = [r.area for r in regions] if len(regions) > 0 else [0]
-        area_dist = np.mean(areas) if len(areas) > 0 else 0.0
-
-        # 4. Compactness (area to bbox ratio)
-        if len(regions) > 0:
-            largest_region = max(regions, key=lambda r: r.area)
-            bbox_area = largest_region.area_bbox  # Fixed deprecation warning
-            region_area = largest_region.area
-            compactness = region_area / bbox_area if bbox_area > 0 else 0.0
-        else:
-            compactness = 0.0
-
-        # 5. Perimeter-area ratio (approximated with edge detection)
-        total_area = np.sum(mask_binary)
-        if total_area > 0:
-            from skimage import filters
-            edges = filters.sobel(mask_binary)
-            total_perimeter = np.sum(edges > 0.1)
-            perim_area_ratio = total_perimeter / np.sqrt(total_area + 1e-6)
-        else:
-            perim_area_ratio = 0.0
-
-        # Coverage (percentage of active pixels)
-        coverage = (np.sum(mask_binary) / mask_binary.size) * 100
-
-        return {
-            'morans_i': round(float(morans_i), 3),
-            'components': int(num_components),
-            'area_dist': round(float(area_dist), 1),
-            'compactness': round(float(compactness), 3),
-            'perim_area': round(float(perim_area_ratio), 3),
-            'coverage': round(float(coverage), 1)
-        }
+        return {name: round(float(val), 3) for name, val in zip(names, features)}
 
     except Exception as e:
         logger.error(f"Error computing statistics for mask {mask_idx}: {e}", exc_info=True)
         return {
-            'morans_i': 0.0,
-            'components': 0,
-            'area_dist': 0.0,
-            'compactness': 0.0,
-            'perim_area': 0.0,
-            'coverage': 0.0
+            'morans_i': 0.0, 'components': 0.0, 'area': 0.0,
+            'variance': 0.0, 'perimeter_ratio': 0.0,
+            'entropy': 0.0, 'mean_confidence': 0.0,
         }
 
 
@@ -236,28 +178,7 @@ def show_collect_page():
     stats_a = compute_mask_statistics(idx_a)
     stats_b = compute_mask_statistics(idx_b)
 
-    # Cheat sheet toggle
-    with st.expander("What do these statistics mean?"):
-        st.markdown("""
-        **Moran's I:** Spatial autocorrelation. Higher values indicate more clustered patterns.
-
-        **Components:** Number of distinct connected regions (clusters of nearby pixels).
-
-        **Area Distribution:** Average size of connected components.
-
-        **Compactness:** Shape circularity (0-1). Higher values indicate more circular, compact shapes.
-
-        **Perimeter-Area Ratio:** Boundary efficiency. Lower values indicate smoother boundaries.
-
-        **Coverage:** Percentage of area predicted as archaeological sites.
-
-        **What to look for:**
-        - Prefer predictions with **compact, coherent** site shapes
-        - Look for **realistic spatial clustering** patterns
-        - Consider whether the site density matches archaeological expectations
-        """)
-
-    # Preference buttons AT THE TOP - all same height
+    # Preference buttons AT THE TOP
     st.markdown("### Your Preference")
 
     # Use custom CSS for button styling
@@ -271,8 +192,7 @@ def show_collect_page():
     </style>
     """, unsafe_allow_html=True)
 
-    # Large, accessible buttons
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3 = st.columns(3)
 
     with col1:
         if st.button("Left Option Better", type="primary", use_container_width=True, key="left_better"):
@@ -286,10 +206,6 @@ def show_collect_page():
         if st.button("Cannot Decide", use_container_width=True, key="tie"):
             record_preference(idx_a, idx_b, 2)
 
-    with col4:
-        if st.button("Skip", use_container_width=True, key="skip"):
-            record_preference(idx_a, idx_b, -1)
-
     st.markdown("---")
 
     # Display comparison question
@@ -299,12 +215,12 @@ def show_collect_page():
             Which prediction looks more plausible for archaeological sites?
         </h2>
         <p style="color: {COLORS['text']}; font-size: 1rem;">
-            Consider: site shape, compactness, spatial coherence, and archaeological realism
+            Consider: site shape, spatial coherence, and archaeological realism
         </p>
     </div>
     """, unsafe_allow_html=True)
 
-    # Display masks side by side - centered and closer together
+    # Display masks side by side
     col1, col2 = st.columns(2)
 
     with col1:
@@ -314,17 +230,19 @@ def show_collect_page():
         </div>
         """, unsafe_allow_html=True)
 
-        # Normalize for display - use container width
         mask_display = (mask_a - mask_a.min()) / (mask_a.max() - mask_a.min() + 1e-8)
         st.image(mask_display, clamp=True, width="stretch")
 
-        # Show statistics
+        # Show statistics (7D features matching experiments)
         st.markdown(f"""
-        <div style="background-color: {COLORS['accent']}; padding: 0.75rem; border-radius: 0.5rem; text-align: center;">
+        <div style="background-color: {COLORS['accent']}; padding: 0.75rem; border-radius: 0.5rem; text-align: center; font-size: 0.9rem;">
             <strong>Moran's I:</strong> {stats_a['morans_i']} &nbsp;|&nbsp;
             <strong>Components:</strong> {stats_a['components']} &nbsp;|&nbsp;
-            <strong>Compactness:</strong> {stats_a['compactness']}<br>
-            <strong>Coverage:</strong> {stats_a['coverage']}%
+            <strong>Area:</strong> {stats_a['area']} &nbsp;|&nbsp;
+            <strong>Variance:</strong> {stats_a['variance']}<br>
+            <strong>Perim. Ratio:</strong> {stats_a['perimeter_ratio']} &nbsp;|&nbsp;
+            <strong>Entropy:</strong> {stats_a['entropy']} &nbsp;|&nbsp;
+            <strong>Confidence:</strong> {stats_a['mean_confidence']}
         </div>
         """, unsafe_allow_html=True)
 
@@ -335,19 +253,46 @@ def show_collect_page():
         </div>
         """, unsafe_allow_html=True)
 
-        # Normalize for display - use container width
         mask_display = (mask_b - mask_b.min()) / (mask_b.max() - mask_b.min() + 1e-8)
         st.image(mask_display, clamp=True, width="stretch")
 
-        # Show statistics
+        # Show statistics (7D features matching experiments)
         st.markdown(f"""
-        <div style="background-color: {COLORS['accent']}; padding: 0.75rem; border-radius: 0.5rem; text-align: center;">
+        <div style="background-color: {COLORS['accent']}; padding: 0.75rem; border-radius: 0.5rem; text-align: center; font-size: 0.9rem;">
             <strong>Moran's I:</strong> {stats_b['morans_i']} &nbsp;|&nbsp;
             <strong>Components:</strong> {stats_b['components']} &nbsp;|&nbsp;
-            <strong>Compactness:</strong> {stats_b['compactness']}<br>
-            <strong>Coverage:</strong> {stats_b['coverage']}%
+            <strong>Area:</strong> {stats_b['area']} &nbsp;|&nbsp;
+            <strong>Variance:</strong> {stats_b['variance']}<br>
+            <strong>Perim. Ratio:</strong> {stats_b['perimeter_ratio']} &nbsp;|&nbsp;
+            <strong>Entropy:</strong> {stats_b['entropy']} &nbsp;|&nbsp;
+            <strong>Confidence:</strong> {stats_b['mean_confidence']}
         </div>
         """, unsafe_allow_html=True)
+
+    # Statistics explanation below the images
+    with st.expander("What do these statistics mean?"):
+        st.markdown("""
+        All features are normalized to **[0, 1]** where higher = better.
+
+        **Moran's I:** Spatial autocorrelation. Higher = more coherent spatial clustering.
+
+        **Components:** Connected regions (inverted log scale). Higher = fewer, more coherent clusters.
+
+        **Area:** Mean component size (log scale). Higher = larger, more substantial sites.
+
+        **Variance:** Variation in probability values. Higher = more distinct high/low confidence regions.
+
+        **Perimeter Ratio:** Boundary smoothness (inverted). Higher = smoother, more compact boundaries.
+
+        **Entropy:** Prediction certainty (inverted). Higher = more confident, less uncertain predictions.
+
+        **Mean Confidence:** Average prediction probability. Higher = stronger overall prediction.
+
+        **What to look for:**
+        - Prefer predictions with **compact, coherent** site shapes
+        - Look for **realistic spatial clustering** patterns
+        - Consider whether the site density matches archaeological expectations
+        """)
 
     st.markdown("---")
 

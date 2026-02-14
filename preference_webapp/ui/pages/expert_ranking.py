@@ -123,51 +123,55 @@ def show_expert_ranking_page():
 
     # Ranking interface
     st.markdown("### Rank the Top 5 Configurations")
-    st.caption("Enter a number from 1 (best) to 5 (worst) for each configuration")
+    st.caption("Use the selector to browse each configuration, then assign your ranking below.")
 
+    # Selector to browse configurations
+    config_labels = [f"PBO Rank #{i+1} — Mask #{top_5_indices[i]+1}" for i in range(5)]
+    selected_label = st.selectbox(
+        "Select configuration to view",
+        options=config_labels,
+        key="ranking_viewer_select"
+    )
+    selected_position = config_labels.index(selected_label)
+    selected_idx = top_5_indices[selected_position]
+
+    # Display the selected mask
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.markdown(f"""
+        <div style="background-color: {COLORS['accent']}; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; text-align: center;">
+            <h3 style="margin: 0;">PBO Rank #{selected_position + 1}</h3>
+            <p style="margin: 0.5rem 0 0 0;">Mask #{selected_idx + 1} &nbsp;|&nbsp; PBO Score: {scores[selected_idx]:.3f}</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        masks = st.session_state.masks
+        mask = np.array(masks[selected_idx], copy=True)
+        mask_display = (mask - mask.min()) / (mask.max() - mask.min() + 1e-8)
+        st.image(mask_display, clamp=True, width="stretch", output_format="PNG")
+
+    st.markdown("---")
+
+    # Ranking selectors for all 5
+    st.markdown("### Assign Your Rankings")
+    st.caption("Select a rank (1 = best, 5 = worst) for each configuration. Each rank must be used exactly once.")
+
+    rank_options = [1, 2, 3, 4, 5]
     expert_ranks = {}
 
-    # Display each mask with ranking input
+    cols = st.columns(5)
     for position, idx in enumerate(top_5_indices):
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.markdown(f"""
-            <div style="background-color: {COLORS['accent']}; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem;">
-                <h3 style="margin: 0;">PBO Rank #{position + 1}</h3>
-                <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem;">Mask #{idx + 1}</p>
-            </div>
-            """, unsafe_allow_html=True)
-
-            # Display mask
-            masks = st.session_state.masks
-            mask = masks[idx]
-            mask_display = (mask - mask.min()) / (mask.max() - mask.min() + 1e-8)
-            st.image(mask_display, clamp=True, width="stretch")
-
-        with col2:
-            st.markdown("<br>", unsafe_allow_html=True)  # Spacer
-
-            # Ranking input
-            rank = st.number_input(
-                f"Your ranking for Mask #{idx + 1}",
-                min_value=1,
-                max_value=5,
-                value=position + 1,
-                step=1,
+        with cols[position]:
+            rank = st.selectbox(
+                f"Mask #{idx + 1}",
+                options=rank_options,
+                index=position,
                 key=f"expert_rank_{idx}",
-                help="1 = best, 5 = worst"
+                help=f"PBO Rank #{position + 1}"
             )
             expert_ranks[idx] = rank
 
-            # Show PBO score
-            st.markdown(f"""
-            <div style="background-color: #f0f0f0; padding: 0.75rem; border-radius: 0.5rem;">
-                <strong>PBO Score:</strong> {scores[idx]:.3f}
-            </div>
-            """, unsafe_allow_html=True)
-
-        st.markdown("---")
+    st.markdown("---")
 
     # Qualitative feedback section
     st.markdown("### Optional Feedback")
@@ -189,9 +193,8 @@ def show_expert_ranking_page():
         if st.button("Confirm Rankings", type="primary", use_container_width=True):
             # Validate rankings (should be 1-5 each exactly once)
             rank_values = list(expert_ranks.values())
-            if sorted(set(rank_values)) != [1, 2, 3, 4, 5]:
+            if sorted(rank_values) != [1, 2, 3, 4, 5]:
                 st.error("Please use each rank (1-5) exactly once!")
-                st.rerun()
                 return
 
             # Calculate agreement
@@ -212,32 +215,9 @@ def show_expert_ranking_page():
             if qualitative_feedback:
                 st.session_state.qualitative_feedback = qualitative_feedback
 
-            # Display results
-            st.markdown(f"""
-            <div style="background-color: #d4edda; padding: 1.5rem; border-radius: 0.5rem; text-align: center; margin: 1rem 0;">
-                <h3 style="color: #155724; margin: 0;">Ranking Agreement</h3>
-                <p style="color: #155724; font-size: 1.1rem; margin: 0.5rem 0 0 0;">
-                    <strong>Kendall's τ = {tau:.3f}</strong> (p = {p_value:.3f})
-                </p>
-            </div>
-            """, unsafe_allow_html=True)
-
-            # Interpretation
-            if tau >= 0.8:
-                st.success("**Excellent agreement!** Your rankings closely match PBO recommendations.")
-            elif tau >= 0.6:
-                st.info("**Good agreement!** Your rankings generally align with PBO recommendations.")
-            elif tau >= 0.4:
-                st.warning("**Moderate agreement.** There is some alignment with PBO recommendations.")
-            else:
-                st.info("**Low agreement.** Your rankings differ significantly from PBO recommendations.")
-
-            st.markdown("---")
-
-            # Continue button
-            if st.button("Continue to Summary", use_container_width=True):
-                st.session_state.current_step = 'summary'
-                st.rerun()
+            # Navigate to summary
+            st.session_state.current_step = 'summary'
+            st.rerun()
 
 
 def get_top_5_for_ranking():
