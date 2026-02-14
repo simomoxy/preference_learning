@@ -36,11 +36,8 @@ def compute_mask_statistics(mask_idx):
         # Ensure 2D array (remove all singleton dimensions)
         mask_2d = np.array(mask)
 
-        # Remove all singleton dimensions
-        while mask_2d.ndim > 2:
-            mask_2d = np.squeeze(mask_2d)
-
-        # If still 3D (e.g., RGB image), convert to grayscale
+        # Convert to 2D grayscale if needed
+        mask_2d = np.squeeze(mask_2d)
         if mask_2d.ndim == 3:
             mask_2d = np.mean(mask_2d, axis=2)
 
