@@ -38,9 +38,9 @@ def show_summary_page():
 
     # Apply theme
     render_progress_indicator(
-        current_step=3,
-        total_steps=3,
-        step_names=['Load Data', 'Compare', 'Summary']
+        current_step=4,
+        total_steps=4,
+        step_names=['Load Data', 'Compare', 'Ranking', 'Summary']
     )
 
     st.markdown("---")
@@ -108,6 +108,67 @@ def show_summary_page():
         st.info("Response time data not available for this session.")
 
     st.markdown("---")
+
+    # Expert Ranking Validation (if completed)
+    if st.session_state.get('expert_ranking_validation'):
+        st.markdown("### Expert Ranking Validation")
+
+        validation = st.session_state.expert_ranking_validation
+        tau = validation['kendall_tau']
+        p_value = validation['p_value']
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.metric("Kendall's τ", f"{tau:.3f}")
+
+        with col2:
+            significance = "Yes" if p_value < 0.05 else "No"
+            st.metric("Significant (p<0.05)", significance)
+
+        with col3:
+            if tau >= 0.8:
+                level = "Excellent"
+                color = "🟢"
+            elif tau >= 0.6:
+                level = "Good"
+                color = "🟡"
+            elif tau >= 0.4:
+                level = "Moderate"
+                color = "🟠"
+            else:
+                level = "Low"
+                color = "🔴"
+            st.metric("Agreement Level", f"{color} {level}")
+
+        # Show ranking comparison
+        st.markdown("**PBO vs Expert Rankings:**")
+
+        pbo_ranking = validation['pbo_ranking']
+        expert_ranking = validation['expert_ranking']
+
+        ranking_comparison = []
+        for position, idx in enumerate(pbo_ranking):
+            ranking_comparison.append({
+                'PBO Rank': position + 1,
+                'Mask #': idx + 1,
+                'Expert Rank': expert_ranking[idx]
+            })
+
+        ranking_df = pd.DataFrame(ranking_comparison)
+        st.dataframe(ranking_df, width="stretch", hide_index=True)
+
+        st.markdown("---")
+
+    # Qualitative Feedback (if provided)
+    if st.session_state.get('qualitative_feedback'):
+        st.markdown("### Your Feedback")
+        st.markdown(f"""
+        <div style="background-color: #f8f9fa; padding: 1rem; border-radius: 0.5rem; border-left: 4px solid #C97B63;">
+            {st.session_state.qualitative_feedback}
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown("---")
 
     # Compute simple ranking based on wins
     ranking_data = compute_simple_ranking(preferences, len(st.session_state.masks))
@@ -189,6 +250,17 @@ def show_summary_page():
                 'period': st.session_state.period,
                 'total_masks': len(st.session_state.masks)
             }
+
+            # Add expert ranking validation if available
+            if st.session_state.get('expert_ranking_validation'):
+                metadata['expert_ranking_validation'] = st.session_state.expert_ranking_validation
+
+            # Add qualitative feedback if available
+            if st.session_state.get('qualitative_feedback'):
+                metadata['qualitative_feedback'] = st.session_state.qualitative_feedback
+
+            # Add active learning setting
+            metadata['use_active_learning'] = st.session_state.get('use_active_learning', False)
 
             from github_data_uploader import upload_preferences_to_github
             success, url, error = upload_preferences_to_github(
@@ -373,7 +445,8 @@ def generate_json_export() -> str:
             'period': st.session_state.period,
             'export_date': datetime.now().isoformat(),
             'total_comparisons': len(valid_prefs),
-            'total_masks': len(st.session_state.masks)
+            'total_masks': len(st.session_state.masks),
+            'use_active_learning': st.session_state.get('use_active_learning', False)
         },
         'summary': {
             'left_wins': len([p for p in valid_prefs if p['preference'] == 0]),
@@ -383,6 +456,14 @@ def generate_json_export() -> str:
         },
         'preferences': []
     }
+
+    # Add expert ranking validation if available
+    if st.session_state.get('expert_ranking_validation'):
+        data['expert_ranking_validation'] = st.session_state.expert_ranking_validation
+
+    # Add qualitative feedback if available
+    if st.session_state.get('qualitative_feedback'):
+        data['qualitative_feedback'] = st.session_state.qualitative_feedback
 
     # Add preferences
     for pref in valid_prefs:

@@ -33,20 +33,28 @@ def compute_mask_statistics(mask_idx):
         masks = st.session_state.masks
         mask = masks[mask_idx]
 
-        # Squeeze to remove singleton dimensions (e.g., (H, W, 1) -> (H, W))
-        mask_squeezed = np.squeeze(mask)
+        # Ensure 2D array (remove all singleton dimensions)
+        mask_2d = np.array(mask)
 
-        # If still 3D, take first channel
-        if mask_squeezed.ndim == 3:
-            mask_squeezed = mask_squeezed[:, :, 0]
+        # Remove all singleton dimensions
+        while mask_2d.ndim > 2:
+            mask_2d = np.squeeze(mask_2d)
+
+        # If still 3D (e.g., RGB image), convert to grayscale
+        if mask_2d.ndim == 3:
+            mask_2d = np.mean(mask_2d, axis=2)
+
+        # Ensure 2D
+        if mask_2d.ndim != 2:
+            raise ValueError(f"Cannot convert mask to 2D, shape: {mask_2d.shape}")
 
         # Ensure we're working with float and normalize to 0-1
-        mask_float = mask_squeezed.astype(float)
+        mask_float = mask_2d.astype(float)
         if mask_float.max() > 1.0:
             mask_float = mask_float / 255.0
 
         # For probability maps, use 0.5 threshold
-        mask_binary = (mask_float > 0.5).astype(int)
+        mask_binary = (mask_float > 0.5).astype(np.uint8)
 
         # 1. Moran's I (spatial autocorrelation)
         mean = mask_float.mean()
@@ -61,7 +69,7 @@ def compute_mask_statistics(mask_idx):
         labeled, num_components = ndimage.label(mask_binary)
 
         # 3. Area distribution (mean component size)
-        regions = measure.regionprops(labeled)
+        regions = measure.regionprops(labeled, mask_binary)
         areas = [r.area for r in regions] if len(regions) > 0 else [0]
         area_dist = np.mean(areas) if len(areas) > 0 else 0.0
 
@@ -120,11 +128,38 @@ def show_collect_page():
             st.rerun()
         return
 
+    # Initialize ActiveLearningLoop if needed (deferred from welcome page to avoid freeze)
+    use_active_learning = st.session_state.get('use_active_learning', False)
+    if use_active_learning and st.session_state.get('active_loop') is None:
+        # Get masks - use stored version to avoid recomputing
+        if 'masks_for_comparison' in st.session_state:
+            masks = st.session_state.masks_for_comparison
+        else:
+            masks = st.session_state.masks
+
+        with st.spinner("Initializing active learning model (this takes a moment)..."):
+            from backend.active_learning_loop import ActiveLearningLoop
+
+            config = {
+                'encoder': 'handcrafted',
+                'strategy': 'gp',
+                'acquisition': 'thompson_sampling',
+                'max_iterations': 100,
+                'n_pairs_per_iteration': 10,
+            }
+
+            st.session_state.active_loop = ActiveLearningLoop(masks, config)
+            st.session_state.masks = masks  # Ensure masks are set
+
+        # Clear the spinner after initialization
+        st.rerun()
+        return
+
     # Apply theme
     render_progress_indicator(
         current_step=2,
-        total_steps=3,
-        step_names=['Load Data', 'Compare', 'Summary']
+        total_steps=4,
+        step_names=['Load Data', 'Compare', 'Ranking', 'Summary']
     )
 
     st.markdown("---")
@@ -151,6 +186,32 @@ def show_collect_page():
     if st.session_state.comparisons_completed >= st.session_state.comparisons_total:
         show_completion_message()
         return
+
+    # Get current pair (support active learning adaptive batches)
+    active_loop = st.session_state.get('active_loop')
+
+    if active_loop is not None:
+        # Active learning mode: get next batch when needed
+        if st.session_state.current_pair_idx >= len(st.session_state.comparison_pairs):
+            # Need more pairs - get next batch from active learning loop
+            if st.session_state.comparisons_completed >= 10:  # Only train after some preferences
+                # Train model and get new pairs
+                try:
+                    new_pairs = active_loop.get_next_batch(n_pairs=10)
+                    st.session_state.comparison_pairs.extend(new_pairs)
+                except Exception as e:
+                    logger.error(f"Error getting next batch: {e}")
+                    # Fall back to random pairs
+                    from welcome import generate_comparison_pairs
+                    remaining = st.session_state.comparisons_total - st.session_state.comparisons_completed
+                    new_pairs = generate_comparison_pairs(len(st.session_state.masks), min(remaining, 10))
+                    st.session_state.comparison_pairs.extend(new_pairs)
+            else:
+                # Not enough data yet - use random pairs
+                from welcome import generate_comparison_pairs
+                remaining = st.session_state.comparisons_total - st.session_state.comparisons_completed
+                new_pairs = generate_comparison_pairs(len(st.session_state.masks), min(remaining, 10))
+                st.session_state.comparison_pairs.extend(new_pairs)
 
     # Get current pair
     pairs = st.session_state.comparison_pairs
@@ -337,6 +398,17 @@ def record_preference(idx_a: int, idx_b: int, preference: int):
 
     st.session_state.preferences.append(preference_data)
 
+    # Update active learning loop if active
+    active_loop = st.session_state.get('active_loop')
+    if active_loop is not None and preference in [0, 1]:  # Only feed non-tie preferences
+        try:
+            active_loop.add_preferences(
+                pairs=[(idx_a, idx_b)],
+                preferences=[preference]
+            )
+        except Exception as e:
+            logger.error(f"Error updating active learning loop: {e}")
+
     # Update progress
     if preference != -1:
         st.session_state.comparisons_completed += 1
@@ -385,6 +457,6 @@ def show_completion_message():
 
     st.markdown("---")
 
-    if st.button("View Summary", type="primary", use_container_width=True):
-        st.session_state.current_step = 'summary'
+    if st.button("Proceed to Ranking", type="primary", use_container_width=True):
+        st.session_state.current_step = 'ranking'
         st.rerun()
